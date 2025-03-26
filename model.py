@@ -28,6 +28,7 @@ def load_data(train_path='train.xlsx', test_path='test.xlsx'):
     
     return train, test
 
+
 def train_model(train):
     """Обучение модели с кэшированием."""
     if os.path.exists(MODEL_PATH):
@@ -65,34 +66,68 @@ def predict_future(model, last_date, periods=4):
     return future_df.assign(predicted_price=predictions)
 
 def plot_predictions(train_data, test_data, predictions):
-    """Создание графика прогноза."""
-    plt.figure(figsize=(14, 7))
+    """Создание графиков прогноза: основного и детализированного."""
+    # Создаем фигуру с двумя графиками
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 12))
     
-    ax = plt.gca()
-    ax.xaxis.set_major_locator(YearLocator())
-    ax.xaxis.set_major_formatter(DateFormatter('%Y'))
-    plt.grid(True, linestyle='--', alpha=0.7)
-    
-    plt.plot(train_data['date'], train_data['price'], 
+    # Основной график (полный обзор)
+    ax1.plot(train_data['date'], train_data['price'], 
              label='Реальные данные (обучение)', color='blue', linewidth=2)
-    
-    plt.plot(train_data['date'], train_data['prediction'], 
+    ax1.plot(train_data['date'], train_data['prediction'], 
              label='Предсказания (обучение)', color='green', linestyle='--', linewidth=1.5)
     
     if test_data is not None:
-        plt.plot(test_data['date'], test_data['price'], 
+        ax1.plot(test_data['date'], test_data['price'], 
                  color='blue', linewidth=2)
     
-    plt.plot(predictions['date'], predictions['predicted_price'], 
+    ax1.plot(predictions['date'], predictions['predicted_price'], 
              label='Прогноз', color='orange', linestyle='-', linewidth=3, marker='o')
     
-    plt.title('Прогнозирование цен на арматуру', fontsize=16, pad=20)
-    plt.xlabel('Дата', fontsize=12)
-    plt.ylabel('Цена (руб)', fontsize=12)
-    plt.legend(fontsize=10, loc='upper left')
+    ax1.set_title('Полный обзор: прогнозирование цен на арматуру', fontsize=14, pad=15)
+    ax1.set_ylabel('Цена (руб)', fontsize=10)
+    ax1.legend(fontsize=9, loc='upper left')
+    ax1.grid(True, linestyle='--', alpha=0.7)
+    ax1.xaxis.set_major_locator(YearLocator())
+    ax1.xaxis.set_major_formatter(DateFormatter('%Y'))
     
+    # Детализированный график (последние данные + прогноз)
+    combined_dates = pd.concat([test_data['date'] if test_data is not None else train_data['date'].iloc[-12:], 
+                              predictions['date']])
+    start_date = combined_dates.min() - pd.Timedelta(days=30)
+    end_date = combined_dates.max() + pd.Timedelta(days=30)
+    
+    mask_train = (train_data['date'] >= start_date) & (train_data['date'] <= end_date)
+    if test_data is not None:
+        mask_test = (test_data['date'] >= start_date) & (test_data['date'] <= end_date)
+    
+    ax2.plot(train_data.loc[mask_train, 'date'], train_data.loc[mask_train, 'price'], 
+             label='Реальные данные (обучение)', color='blue', linewidth=2)
+    ax2.plot(train_data.loc[mask_train, 'date'], train_data.loc[mask_train, 'prediction'], 
+             label='Предсказания (обучение)', color='green', linestyle='--', linewidth=1.5)
+    
+    if test_data is not None:
+        ax2.plot(test_data.loc[mask_test, 'date'], test_data.loc[mask_test, 'price'], 
+                 color='blue', linewidth=2, label='Реальные данные (тест)')
+    
+    ax2.plot(predictions['date'], predictions['predicted_price'], 
+             label='Прогноз', color='orange', linestyle='-', linewidth=3, marker='o')
+    
+    ax2.set_title('Детализированный вид: последние данные и прогноз', fontsize=14, pad=15)
+    ax2.set_xlabel('Дата', fontsize=10)
+    ax2.set_ylabel('Цена (руб)', fontsize=10)
+    ax2.legend(fontsize=9, loc='upper left')
+    ax2.grid(True, linestyle='--', alpha=0.7)
+    ax2.xaxis.set_major_formatter(DateFormatter('%d.%m.%Y'))
+    
+    # Автоматический поворот дат для лучшей читаемости
+    plt.setp(ax2.get_xticklabels(), rotation=45, ha='right')
+    
+    # Улучшаем layout
+    plt.tight_layout()
+    
+    # Сохраняем в буфер
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+    plt.savefig(buf, format='png', dpi=120, bbox_inches='tight')
     buf.seek(0)
     plt.close()
     

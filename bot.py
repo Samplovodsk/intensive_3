@@ -19,20 +19,19 @@ class States:
 user_state = {}
 predictions_data = {}
 
-# Инициализация модели
+# Иниц-я модели
 def init_model():
     try:
         print("Инициализация модели...")
         train, test = load_data()
-        model, train_with_predictions = train_model(train)  # Теперь ожидаем два значения
-        last_date = test['date'].iloc[-1] if not test.empty else train['date'].iloc[-1]
+        model, train_with_predictions = train_model(train)
         print("Модель готова к работе!")
-        return model, train_with_predictions, test, last_date
+        return model, train_with_predictions, test
     except Exception as e:
         print(f"Ошибка инициализации модели: {e}")
         sys.exit(1)
 
-model, train_data, test_data, last_date = init_model()
+model, train_data, test_data = init_model()
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -54,10 +53,19 @@ def send_welcome(message):
 def auto_predict(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        predictions = predict_future(model, last_date, periods=6)
+        
+        # Берем текущую дату с компьютера
+        current_date = datetime.datetime.now()
+        
+        # Если текущий день не понедельник, находим следующий понедельник
+        if current_date.weekday() != 0:  # 0 - это понедельник
+            days_until_monday = (7 - current_date.weekday()) % 7
+            current_date += datetime.timedelta(days=days_until_monday)
+        
+        predictions = predict_future(model, current_date, periods=6)
         
         # Текстовый прогноз
-        response = "📊 Автоматический прогноз на 6 недель:\n\n"
+        response = f"📊 Автоматический прогноз на 6 недель с {current_date.strftime('%d.%m.%Y')}:\n\n"
         for _, row in predictions.iterrows():
             response += f"📅 {row['date'].strftime('%d.%m.%Y')}: {int(row['predicted_price']):,} руб.\n"
         
@@ -69,7 +77,7 @@ def auto_predict(message):
     except Exception as e:
         bot.send_message(message.chat.id, "⚠️ Ошибка прогноза. Попробуйте позже.")
         print(f"Ошибка автопрогноза: {e}")
-
+        
 @bot.message_handler(func=lambda m: m.text == "Сделать прогноз")
 def start_custom_predict(message):
     msg = bot.send_message(
@@ -132,7 +140,7 @@ def process_periods(message):
 def start_bot():
     while True:
         try:
-            print("Запуск бота...")
+            print("Бот готов.")
             bot.polling(none_stop=True, interval=3, timeout=30)
         except requests.exceptions.ReadTimeout:
             print("Таймаут соединения, переподключение через 5 секунд...")
